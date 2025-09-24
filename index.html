@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小田吃光辣寶貝團購</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f9;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 p-4 sm:p-8">
+    <div id="app" class="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-6 sm:p-10">
+        <h1 class="text-3xl sm:text-4xl font-bold text-center text-gray-800 mb-6">小田吃光辣寶貝團購</h1>
+        <p class="text-center text-gray-600 mb-8">請選擇您想要的品項與數量，總金額會自動計算。</p>
+        <!-- Website Link -->
+        <div class="text-center mb-6">
+            <a href="https://www.smallfarmeatmore.com/products" target="_blank"
+                class="text-sm font-medium text-indigo-600 hover:text-indigo-800 transition duration-150 ease-in-out">前往辣椒醬官網查看所有品項與介紹</a>
+        </div>
+
+        <!-- Loading state -->
+        <div id="loading" class="text-center text-gray-500 my-8">
+            <div class="flex items-center justify-center">
+                <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-500"></div>
+                <span class="ml-3 text-lg">載入中...</span>
+            </div>
+        </div>
+
+        <div id="main-content" class="hidden">
+            <!-- Order Form -->
+            <div class="border-b border-gray-200 pb-8 mb-8">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">我的訂單</h2>
+                <form id="order-form" class="space-y-6">
+                    <div>
+                        <label for="name" class="block text-sm font-medium text-gray-700">您的姓名</label>
+                        <input type="text" id="name" name="name" required
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
+                    </div>
+
+                    <div id="items-container" class="space-y-4">
+                        <!-- Item inputs will be dynamically added here -->
+                    </div>
+
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800 flex justify-between items-center">
+                            總金額：<span id="total-price" class="text-indigo-600 text-2xl font-bold">$0</span>
+                        </h3>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <button type="submit"
+                            class="w-full sm:w-1/2 flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition ease-in-out duration-150">
+                            送出訂單
+                        </button>
+                        <button type="button" id="delete-order-btn"
+                            class="w-full sm:w-1/2 flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-500 hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition ease-in-out duration-150 hidden">
+                            刪除我的訂單
+                        </button>
+                    </div>
+                </form>
+                <div id="message-box"
+                    class="mt-4 p-3 rounded-md text-sm transition-opacity duration-300 opacity-0 hidden"></div>
+            </div>
+
+            <!-- Order Summary -->
+            <div>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-semibold text-gray-800">所有人的訂單</h2>
+                    <button id="copy-summary-btn"
+                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium py-2 px-4 rounded-md transition ease-in-out duration-150">
+                        複製訂單摘要
+                    </button>
+                </div>
+                <div id="orders-summary-container" class="space-y-4">
+                    <!-- Orders will be dynamically loaded here -->
+                </div>
+                <div class="mt-8 pt-4 border-t-2 border-gray-300">
+                    <h3 class="text-xl font-bold text-gray-800 flex justify-between items-center">
+                        團購總計：<span id="grand-total-price" class="text-red-600 text-3xl font-bold">$0</span>
+                    </h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxv-GzxNNWoRsRgR4ahXg57-Lxy0gtN21atJxMhoItJGEXPCAFKUAUJvyhFTk4GMH7vlA/exec'; // <<<---- 您的 Apps Script 網址已貼在此處
+
+        const ITEMS = [
+            { name: "手工辣椒粉", price: 300, id: 'handmade-chili-powder' },
+            { name: "手工辣椒粉隨身包(5入)", price: 100, id: 'chili-powder-travel-pack' },
+            { name: "手工辣椒乾", price: 120, id: 'handmade-dried-chili' },
+            { name: "經典蒜辣｜手工辣椒醬", price: 300, id: 'classic-garlic-chili-sauce' },
+            { name: "手工辣椒醬隨身瓶", price: 90, id: 'chili-sauce-portable' },
+        ];
+
+        const orderForm = document.getElementById('order-form');
+        const itemsContainer = document.getElementById('items-container');
+        const totalPriceEl = document.getElementById('total-price');
+        const ordersSummaryContainer = document.getElementById('orders-summary-container');
+        const grandTotalEl = document.getElementById('grand-total-price');
+        const copySummaryBtn = document.getElementById('copy-summary-btn');
+        const deleteOrderBtn = document.getElementById('delete-order-btn');
+        const nameInput = document.getElementById('name');
+        const messageBox = document.getElementById('message-box');
+        const loadingEl = document.getElementById('loading');
+        const mainContentEl = document.getElementById('main-content');
+        let userId = localStorage.getItem('chiliOrderUserId') || crypto.randomUUID();
+        localStorage.setItem('chiliOrderUserId', userId);
+
+        // Function to show a message
+        function showMessage(text, type = 'success') {
+            messageBox.textContent = text;
+            messageBox.className = `mt-4 p-3 rounded-md text-sm transition-opacity duration-300 ${type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                } block opacity-100`;
+            setTimeout(() => {
+                messageBox.classList.remove('opacity-100');
+                messageBox.classList.add('opacity-0');
+            }, 3000);
+        }
+
+        // Render item inputs
+        function renderItemInputs() {
+            itemsContainer.innerHTML = '';
+            ITEMS.forEach(item => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'flex items-center justify-between space-x-4';
+                itemDiv.innerHTML = `
+                    <div class="flex-grow">
+                        <label for="${item.id}" class="block text-sm font-medium text-gray-700">${item.name} ($${item.price})</label>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button type="button" class="quantity-btn bg-gray-200 rounded-md p-1 hover:bg-gray-300 w-8 h-8 flex items-center justify-center text-lg font-bold" data-id="${item.id}" data-action="decrease">-</button>
+                        <input type="number" id="${item.id}" name="${item.id}" value="0" min="0"
+                            class="w-16 text-center rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
+                        <button type="button" class="quantity-btn bg-gray-200 rounded-md p-1 hover:bg-gray-300 w-8 h-8 flex items-center justify-center text-lg font-bold" data-id="${item.id}" data-action="increase">+</button>
+                    </div>
+                `;
+                itemsContainer.appendChild(itemDiv);
+            });
+            attachQuantityButtonListeners();
+        }
+
+        function attachQuantityButtonListeners() {
+            document.querySelectorAll('.quantity-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const id = e.target.dataset.id;
+                    const action = e.target.dataset.action;
+                    const input = document.getElementById(id);
+                    let value = parseInt(input.value, 10);
+                    if (action === 'increase') {
+                        value++;
+                    } else if (action === 'decrease' && value > 0) {
+                        value--;
+                    }
+                    input.value = value;
+                    calculateTotal();
+                });
+            });
+
+            document.querySelectorAll('input[type="number"]').forEach(input => {
+                input.addEventListener('input', calculateTotal);
+            });
+        }
+
+        function calculateTotal() {
+            let total = 0;
+            const items = {};
+            ITEMS.forEach(item => {
+                const quantity = parseInt(document.getElementById(item.id).value, 10) || 0;
+                total += quantity * item.price;
+                items[item.id] = quantity;
+            });
+            totalPriceEl.textContent = `$${total}`;
+            return items;
+        }
+
+        async function saveOrder(e) {
+            e.preventDefault();
+            const name = nameInput.value.trim();
+            const items = calculateTotal();
+            const total = parseInt(totalPriceEl.textContent.replace('$', ''), 10);
+
+            if (!name) {
+                showMessage('請輸入您的姓名', 'error');
+                return;
+            }
+
+            if (total === 0) {
+                showMessage('請至少選擇一項商品', 'error');
+                return;
+            }
+
+            const orderData = {
+                name,
+                items,
+                total,
+                userId
+            };
+
+            try {
+                const response = await google.script.run
+                    .withSuccessHandler(() => {
+                        showMessage('訂單已送出！');
+                    })
+                    .withFailureHandler(error => {
+                        console.error('Apps Script error:', error);
+                        showMessage('送出訂單時發生錯誤', 'error');
+                    })
+                    .processOrder(orderData);
+            } catch (error) {
+                console.error('Local error:', error);
+                showMessage('送出訂單時發生錯誤', 'error');
+            }
+        }
+
+        function renderOrders(orders) {
+            ordersSummaryContainer.innerHTML = '';
+            let grandTotal = 0;
+            orders.sort((a, b) => a.timestamp - b.timestamp).forEach(order => {
+                const orderDiv = document.createElement('div');
+                orderDiv.className = 'bg-gray-50 p-4 rounded-lg shadow-sm';
+                let itemsListHtml = '';
+                let hasItems = false;
+                ITEMS.forEach(item => {
+                    const quantity = order.items[item.id] || 0;
+                    if (quantity > 0) {
+                        itemsListHtml += `<li class="flex justify-between items-center text-gray-600">
+                            <span>${item.name}</span>
+                            <span>${quantity} x $${item.price}</span>
+                        </li>`;
+                        hasItems = true;
+                    }
+                });
+
+                if (!hasItems) return;
+
+                orderDiv.innerHTML = `
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-lg font-semibold text-indigo-600">${order.name}</h3>
+                        <p class="text-xl font-bold text-gray-800">$${order.total}</p>
+                    </div>
+                    <ul class="list-disc pl-5 space-y-1">
+                        ${itemsListHtml}
+                    </ul>
+                `;
+                ordersSummaryContainer.appendChild(orderDiv);
+                grandTotal += order.total;
+            });
+            grandTotalEl.textContent = `$${grandTotal}`;
+        }
+
+        function copySummary() {
+            let summaryText = '辣椒醬團購訂單總覽：\n\n';
+            let grandTotal = 0;
+            const orders = Array.from(ordersSummaryContainer.children);
+            if (orders.length === 0) {
+                showMessage('沒有訂單可供複製。', 'error');
+                return;
+            }
+
+            orders.forEach(orderDiv => {
+                const name = orderDiv.querySelector('h3').textContent;
+                const total = orderDiv.querySelector('p').textContent;
+                summaryText += `【${name}】\n`;
+                const items = orderDiv.querySelectorAll('li');
+                items.forEach(item => {
+                    const [itemName, itemDetails] = item.textContent.split('  ');
+                    summaryText += `- ${itemName} ${itemDetails}\n`;
+                });
+                summaryText += `金額總計：${total}\n\n`;
+                grandTotal += parseFloat(total.replace('$', ''));
+            });
+
+            summaryText += `\n所有訂單總計：$${grandTotal}`;
+
+            // Create a temporary textarea to copy the text
+            const tempTextarea = document.createElement('textarea');
+            tempTextarea.value = summaryText;
+            document.body.appendChild(tempTextarea);
+            document.execCommand('copy');
+            document.body.removeChild(tempTextarea);
+
+            showMessage('訂單摘要已複製到剪貼簿！');
+        }
+
+        async function deleteMyOrder() {
+            try {
+                const response = await google.script.run
+                    .withSuccessHandler(() => {
+                        orderForm.reset();
+                        calculateTotal();
+                        deleteOrderBtn.classList.add('hidden');
+                        showMessage('我的訂單已刪除！');
+                        fetchOrders();
+                    })
+                    .withFailureHandler(error => {
+                        console.error('Apps Script error:', error);
+                        showMessage('刪除訂單時發生錯誤', 'error');
+                    })
+                    .deleteOrder(userId);
+            } catch (error) {
+                console.error('Local error:', error);
+                showMessage('刪除訂單時發生錯誤', 'error');
+            }
+        }
+
+        async function fetchOrders() {
+            try {
+                const orders = await google.script.run
+                    .withSuccessHandler(orders => {
+                        renderOrders(orders);
+                        const myOrder = orders.find(order => order.userId === userId);
+                        if (myOrder) {
+                            nameInput.value = myOrder.name;
+                            ITEMS.forEach(item => {
+                                document.getElementById(item.id).value = myOrder.items[item.id] || 0;
+                            });
+                            calculateTotal();
+                            deleteOrderBtn.classList.remove('hidden');
+                        }
+                    })
+                    .withFailureHandler(error => {
+                        console.error('Apps Script error:', error);
+                    })
+                    .getOrders();
+                loadingEl.classList.add('hidden');
+                mainContentEl.classList.remove('hidden');
+            } catch (error) {
+                console.error('Local error:', error);
+                loadingEl.classList.add('hidden');
+                mainContentEl.classList.remove('hidden');
+                showMessage('載入訂單時發生錯誤。', 'error');
+            }
+        }
+
+        // Initialize UI and event listeners
+        window.onload = function () {
+            renderItemInputs();
+            orderForm.addEventListener('submit', saveOrder);
+            copySummaryBtn.addEventListener('click', copySummary);
+            deleteOrderBtn.addEventListener('click', deleteMyOrder);
+            calculateTotal();
+            fetchOrders();
+        }
+    </script>
+</body>
+
+</html>
